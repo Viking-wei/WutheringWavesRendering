@@ -3,8 +3,10 @@ Shader "WutheringWave/ClothShader"
     Properties
     {
         _MainTex ("Texture", 2D) = "white" {}
+        _Ramp ("Texture", 2D) = "white" {}
         _NormalMap ("NormalMap", 2D) = "bump" {}
         _MatCapTex ("MatCapTex", 2D) = "white" {}
+        _Shininess ("Shininess", Range(0.1, 100.0)) = 32.0
         _OutlineTex ("OutlineTex", 2D) = "Black" {}
         _OutlineWidth ("Outline Width", Range(0.01, 1)) = 0.01
     }
@@ -46,7 +48,15 @@ Shader "WutheringWave/ClothShader"
             sampler2D _MainTex;
             sampler2D _NormalMap;
             sampler2D _MatCapTex;
+            sampler2D _Ramp;
+            float _Shininess;
             float4 _MainTex_ST;
+            
+            half LightingDiffuse(half3 lightDir, half3 normal, half atten)
+            {
+                half diff = max(dot(lightDir, normal),0.0);
+                return diff * atten;
+            }
 
             v2f vert (appdata v)
             {
@@ -72,6 +82,16 @@ Shader "WutheringWave/ClothShader"
                 half3 normalTS = UnpackNormal(packedNormal);
                 half3 normalWS = mul(normalTS, tbn);
 
+                float3 lightDir = _WorldSpaceLightPos0.xyz;
+                half diffuse = LightingDiffuse(lightDir, normalWS, 1);
+                
+                float3 viewDir = normalize(_WorldSpaceCameraPos.xyz - i.positionWS);
+                float3 halfVec = normalize(lightDir + viewDir);
+                float specReal = pow(max(dot(normalWS, halfVec), 0.0), _Shininess);
+
+                // environment lighting
+                half3 ambient = UNITY_LIGHTMODEL_AMBIENT.rgb;
+                
 
                 float3 viewNormal = normalize(mul((float3x3)unity_MatrixV,normalWS));
                 float matcapUV = 0.5 + 0.5 * viewNormal.xy;
@@ -81,7 +101,8 @@ Shader "WutheringWave/ClothShader"
                 half4 col = tex2D(_MainTex, i.uv);
                 // apply fog
                 UNITY_APPLY_FOG(i.fogCoord, col);
-                //return half4(normalWS,1);
+                //return half4(ambient,1);
+                return diffuse+specReal;
                 return col + matcapColor * matcapMask.x;
             }
             ENDCG

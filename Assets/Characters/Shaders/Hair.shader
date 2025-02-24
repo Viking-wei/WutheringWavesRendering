@@ -118,7 +118,7 @@ Shader"WutheringWave/Hair"
             ENDCG
         }
 
-             Pass
+        Pass
         {
             Tags {"LightMode"="ForwardBase"}
             Name "Outline"

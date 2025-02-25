@@ -2,13 +2,16 @@ Shader "WutheringWave/ClothShader"
 {
     Properties
     {
-        _MainTex ("Texture", 2D) = "white" {}
-        _Ramp ("Texture", 2D) = "white" {}
+        _MainTex ("MainTex", 2D) = "white" {}
+        _Ramp ("Ramp", 2D) = "white" {}
         _NormalMap ("NormalMap", 2D) = "bump" {}
         _MatCapTex ("MatCapTex", 2D) = "white" {}
         _Shininess ("Shininess", Range(0.1, 100.0)) = 32.0
         _OutlineTex ("OutlineTex", 2D) = "Black" {}
         _OutlineWidth ("Outline Width", Range(0.01, 1)) = 0.01
+        _ShadowEdgeStart ("Shadow Edge Start", Range(0,1)) = 0.2
+        _ShadowEdgeEnd ("Shadow Edge End", Range(0,1)) = 0.7
+        _ShadowValue ("Shadow Value", Range(0,1)) = 0.6
     }
     SubShader
     {
@@ -22,8 +25,15 @@ Shader "WutheringWave/ClothShader"
             #pragma fragment frag
             // make fog work
             #pragma multi_compile_fog
-
+            // Use shader model 3.0 target, to get nicer looking lighting
+            #pragma target 3.0
             #include "UnityCG.cginc"
+            #include "Lighting.cginc"
+            #define RAMP0 0.1
+            #define RAMP1 0.3
+            #define RAMP2 0.5
+            #define RAMP3 0.7
+            #define RAMP4 0.9
 
             struct appdata
             {
@@ -50,12 +60,23 @@ Shader "WutheringWave/ClothShader"
             sampler2D _MatCapTex;
             sampler2D _Ramp;
             float _Shininess;
+            float _ShadowEdgeStart;
+            float _ShadowEdgeEnd;
+            float _ShadowValue;
             float4 _MainTex_ST;
             
             half LightingDiffuse(half3 lightDir, half3 normal, half atten)
             {
                 half diff = max(dot(lightDir, normal),0.0);
                 return diff * atten;
+            }
+
+            float3 CustomUnpackNormal(float4 packedNormal)
+            {
+                float3 normal;
+                normal.xy = packedNormal.xy;
+                normal.z = sqrt(1.0 - saturate(dot(normal.xy, normal.xy)));
+                return normal;
             }
 
             v2f vert (appdata v)
@@ -73,37 +94,43 @@ Shader "WutheringWave/ClothShader"
 
             half4 frag (v2f i) : SV_Target
             {
+                // sample the texture
+                half4 albedo = tex2D(_MainTex, i.uv);
+                
                 float3 normal = normalize(i.normal);
                 float3 tangent = normalize(i.tangent);
                 float3 bitangent = cross(normal, tangent);
                 float3x3 tbn = float3x3(tangent, bitangent, normal);
 
-                half4 packedNormal = tex2D(_NormalMap, i.uv);
-                half3 normalTS = UnpackNormal(packedNormal);
-                half3 normalWS = mul(normalTS, tbn);
+                float4 packedNormal = tex2D(_NormalMap, i.uv);
+                float3 normalTS = CustomUnpackNormal(packedNormal);
+                float3 normalWS = mul(normalTS, tbn);
 
                 float3 lightDir = _WorldSpaceLightPos0.xyz;
+                half3 lightColor = _LightColor0.xyz;
                 half diffuse = LightingDiffuse(lightDir, normalWS, 1);
-                
+
                 float3 viewDir = normalize(_WorldSpaceCameraPos.xyz - i.positionWS);
                 float3 halfVec = normalize(lightDir + viewDir);
                 float specReal = pow(max(dot(normalWS, halfVec), 0.0), _Shininess);
 
+                float cellShading = smoothstep(_ShadowEdgeStart, _ShadowEdgeEnd, diffuse + specReal);
+                cellShading = lerp(_ShadowValue, 1, cellShading + albedo.a);
+                
                 // environment lighting
                 half3 ambient = UNITY_LIGHTMODEL_AMBIENT.rgb;
-                
 
+                // matcap
                 float3 viewNormal = normalize(mul((float3x3)unity_MatrixV,normalWS));
-                float matcapUV = 0.5 + 0.5 * viewNormal.xy;
+                float2 matcapUV = 0.5 + 0.5 * viewNormal.xy;
                 half4 matcapColor = tex2D(_MatCapTex, matcapUV);
-                float2 matcapMask = tex2D(_NormalMap, i.uv).ba;
-                // sample the texture
-                half4 col = tex2D(_MainTex, i.uv);
-                // apply fog
-                UNITY_APPLY_FOG(i.fogCoord, col);
-                //return half4(ambient,1);
-                return diffuse+specReal;
-                return col + matcapColor * matcapMask.x;
+                float matcapMask = tex2D(_NormalMap, i.uv).b;
+                
+                UNITY_APPLY_FOG(i.fogCoord, albedo);
+                half4 ramppedCol = lightColor.xyzz *tex2D(_Ramp, float2(cellShading, RAMP0));
+                
+                return (albedo + matcapColor * matcapMask) * cellShading;
+                return albedo * lightColor.rgbb * cellShading;
             }
             ENDCG
         }
@@ -161,3 +188,11 @@ Shader "WutheringWave/ClothShader"
         }
     }
 }
+
+
+
+
+
+
+
+

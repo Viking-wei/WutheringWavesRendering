@@ -7,6 +7,11 @@ Shader "WutheringWave/Skin"
         _MatCapTex ("MatCapTex", 2D) = "Black" {}
         _OutlineTex ("OutlineTex", 2D) = "Black" {}
         _OutlineWidth ("Outline Width", Range(0.1, 3)) = 0.5
+        _ShadowEdgeStart ("Shadow Edge Start", Range(0,1)) = 0.2
+        _ShadowEdgeEnd ("Shadow Edge End", Range(0,1)) = 0.7
+        _ShadowValue ("Shadow Value", Range(0,1)) = 0.6
+        _Shininess ("Shininess", Range(0.1, 100.0)) = 32.0
+        _IDMap ("IDMap", 2D) = "Black" {}
     }
     SubShader
     {
@@ -22,6 +27,8 @@ Shader "WutheringWave/Skin"
             #pragma multi_compile_fog
 
             #include "UnityCG.cginc"
+            #include "Lighting.cginc"
+            #include "Utilities.cginc"
 
             struct appdata
             {
@@ -46,6 +53,10 @@ Shader "WutheringWave/Skin"
             sampler2D _MainTex;
             sampler2D _NormalMap;
             sampler2D _MatCapTex;
+            float _ShadowEdgeStart;
+            float _ShadowEdgeEnd;
+            float _ShadowValue;
+            float _Shininess;
             float4 _MainTex_ST;
 
             v2f vert (appdata v)
@@ -63,25 +74,31 @@ Shader "WutheringWave/Skin"
 
             half4 frag (v2f i) : SV_Target
             {
+                half4 albedo = tex2D(_MainTex, i.uv);
                 float3 normal = normalize(i.normal);
                 float3 tangent = normalize(i.tangent);
-                float3 bitangent = cross(normal, tangent);
-                float3x3 tbn = float3x3(tangent, bitangent, normal);
+                
+                float3 normalWS = SampleNormalMap(_NormalMap, i.uv, normal, tangent);
+                //normalWS = UnityObjectToWorldNormal(normal);
 
-                half4 packedNormal = tex2D(_NormalMap, i.uv);
-                half3 normalTS = UnpackNormal(packedNormal);
-                half3 normalWS = mul(normalTS, tbn);
+                float3 lightDir = _WorldSpaceLightPos0.xyz;
+                half3 lightColor = _LightColor0.xyz;
+                half diffuse = LightingDiffuse(lightDir, normalWS, 1);
+                float3 viewDir = normalize(_WorldSpaceCameraPos.xyz - i.positionWS);
+                float3 halfVec = normalize(lightDir + viewDir);
+                float spec = pow(max(dot(normalWS, halfVec), 0.0), _Shininess);
 
+                float cellShading = smoothstep(_ShadowEdgeStart, _ShadowEdgeEnd, diffuse + spec);
+                cellShading = lerp(_ShadowValue, 1, cellShading + albedo.a);
 
                 float3 viewNormal = normalize(mul((float3x3)unity_MatrixV,normalWS));
-                float matcapUV = 0.5 + 0.5 * viewNormal.xy;
-                half4 matcapColor = tex2D(_MatCapTex, matcapUV);
-                float2 matcapMask = tex2D(_NormalMap, i.uv).ba;
-                // sample the texture
-                half4 col = tex2D(_MainTex, i.uv);
-                // apply fog
-                UNITY_APPLY_FOG(i.fogCoord, col);
-                return col;
+                float2 matcapUV = 0.5 + 0.5 * viewNormal.xy;
+                half4 matcapColor = tex2D(_MatCapTex, matcapUV); 
+                float matcapMask = tex2D(_NormalMap, i.uv).b;
+                
+                half4 finalCol = albedo * cellShading * lightColor.rgbb + matcapColor * matcapMask;
+                UNITY_APPLY_FOG(i.fogCoord, finalCol);
+                return finalCol;
             }
             ENDCG
         }

@@ -88,6 +88,9 @@ Material:
     - _OcclusionStrength: 1
     - _OutlineWidth: 0.1
     - _Parallax: 0.02
+    - _ShadowEdgeEnd: 0.538
+    - _ShadowEdgeStart: 0.459
+    - _ShadowValue: 0.6
     - _Shininess: 32
     - _SmoothnessTextureChannel: 1
     - _Specular: 0.179

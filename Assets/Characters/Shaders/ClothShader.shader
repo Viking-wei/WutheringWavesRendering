@@ -92,7 +92,7 @@ Shader "WutheringWave/ClothShader"
                 return o;
             }
 
-            half4 frag (v2f i) : SV_Target
+            half4  frag (v2f i) : SV_Target
             {
                 // sample the texture
                 half4 albedo = tex2D(_MainTex, i.uv);
@@ -129,8 +129,7 @@ Shader "WutheringWave/ClothShader"
                 UNITY_APPLY_FOG(i.fogCoord, albedo);
                 half4 ramppedCol = lightColor.xyzz *tex2D(_Ramp, float2(cellShading, RAMP0));
                 
-                return (albedo + matcapColor * matcapMask) * cellShading;
-                return albedo * lightColor.rgbb * cellShading;
+                return (albedo + matcapColor * matcapMask) * cellShading *lightColor.rgbb;
             }
             ENDCG
         }

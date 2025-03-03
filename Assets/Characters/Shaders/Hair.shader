@@ -7,8 +7,11 @@ Shader"WutheringWave/Hair"
         _Specular ("Specular", Range(0,1)) = 0.5
         _Shininess ("Shininess", Range(0.1, 100.0)) = 32.0
         _NormalMap ("NormalMap", 2D) = "bump" {}
-         _OutlineTex ("OutlineTex", 2D) = "Black" {}
+        _OutlineTex ("OutlineTex", 2D) = "Black" {}
         _OutlineWidth ("Outline Width", Range(0.1, 1)) = 0.01
+        _ShadowEdgeStart ("Shadow Edge Start", Range(0,1)) = 0.2
+        _ShadowEdgeEnd ("Shadow Edge End", Range(0,1)) = 0.7
+        _ShadowValue ("Shadow Value", Range(0,1)) = 0.6
     }
     SubShader
     {
@@ -27,20 +30,7 @@ Shader"WutheringWave/Hair"
 
             #include "UnityCG.cginc"
             #include "UnityPBSLighting.cginc"
-
-            half LightingDiffuse(half3 lightDir, half3 normal, half atten)
-            {
-                half diff = max(dot(lightDir, normal),0.0);
-                return diff * atten;
-            }
-            
-            float Remap(float value, float srcMin, float srcMax, float dstMin, float dstMax)
-            {
-                float normalizedValue = (value - srcMin) / (srcMax - srcMin);
-                return dstMin + normalizedValue * (dstMax - dstMin);
-            }
-
-            
+            #include "Utilities.cginc"
 
             struct appdata
             {
@@ -64,6 +54,9 @@ Shader"WutheringWave/Hair"
 
             float _Specular;
             float _Shininess;
+            float _ShadowEdgeStart;
+            float _ShadowEdgeEnd;
+            float _ShadowValue;
 
             sampler2D _MainTex;
             sampler2D _NormalMap;
@@ -87,33 +80,30 @@ Shader"WutheringWave/Hair"
 
             half3 frag (v2f i) : SV_Target
             {
-                float3 normal = normalize(mul(unity_ObjectToWorld,i.normal));
-                float3 tangent = normalize(mul(unity_ObjectToWorld,i.tangent));
-                float3 bitangent = cross(normal, tangent);
-                float3x3 tbn = float3x3(tangent, bitangent, normal);
-                
-                // direct lighting
-                half3 col = tex2D(_MainTex, i.uv).rgb;
-                half4 packedNormal = tex2D(_NormalMap, i.uv);
-                half3 normalTS = UnpackNormal(packedNormal);
-                half3 normalWS = mul(normalTS, tbn);
+                half4 albedo = tex2D(_MainTex, i.uv);
+                float3 normal = normalize(i.normal);
+                float3 tangent = normalize(i.tangent);
+                float3 normalWS = SampleNormalMapTraditional(_NormalMap, i.uv, normal, tangent);
+                //normalWS = UnityObjectToWorldNormal(normal);
+                    
                 float3 lightDir = _WorldSpaceLightPos0.xyz;
                 half diffuse = LightingDiffuse(lightDir, normalWS, 1);
-                diffuse = Remap(diffuse, 0, 1, 0.5, 1);
                 
                 float3 viewDir = normalize(_WorldSpaceCameraPos.xyz - i.positionWS);
                 float3 halfVec = normalize(lightDir + viewDir);
-                float specReal = pow(max(dot(normalWS, halfVec), 0.0), _Shininess);
+                //float specReal = pow(max(dot(normalWS, halfVec), 0.0), _Shininess);
+                float specReal = 0;
                 float specFake = tex2D(_SpecularMap, i.uv);
                 half3 specular = (specReal + specFake)*_Specular;
+                float cellShading = smoothstep(_ShadowEdgeStart, _ShadowEdgeEnd, diffuse);
+                cellShading = lerp(_ShadowValue, 1, cellShading);
                 
                 // environment lighting
                 half3 ambient = UNITY_LIGHTMODEL_AMBIENT.rgb;
 
-                half3 finalColor = col * diffuse + specular + ambient;
+                half3 finalColor = albedo * cellShading + specular + ambient;
                 UNITY_APPLY_FOG(i.fogCoord, finalColor);
-                return col + specFake * _Specular;
-                return half4(packedNormal);
+                return finalColor;
             }
             ENDCG
         }

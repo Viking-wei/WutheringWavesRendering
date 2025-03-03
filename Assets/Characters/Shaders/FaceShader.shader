@@ -7,6 +7,8 @@ Shader "WutheringWave/FaceShader"
         _Ramp ("Ramp", 2D) = "white" {}
         _OutlineTex ("OutlineTex", 2D) = "Black" {}
         _OutlineWidth ("Outline Width", Range(0.1, 3)) = 0.5
+        _ShadowValue ("Shadow Value", Range(0,1)) = 0.6
+        _ShadowFade ("Shadow Fade", Range(0,1)) = 0.2
         _IDMask ("IDMask", 2D) = "white" {}
     }
     SubShader
@@ -43,6 +45,8 @@ Shader "WutheringWave/FaceShader"
             sampler2D _MainTex;
             float4 _MainTex_ST;
             float4 _FaceSDF_TexelSize;
+            float _ShadowValue;
+            float _ShadowFade;
 
             sampler2D _FaceSDF;
             sampler2D _Ramp;
@@ -55,13 +59,11 @@ Shader "WutheringWave/FaceShader"
                 
                 float flipSign = sign(dot(left, lightDirIgnorey));
                 float4 sdf = tex2D(faceSDF, uv * float2(flipSign, 1));
-                float sdfb = sdf.b;
-                float sdfa = sdf.a;
-                float sdfMix = (sdf.b+sdf.a)/2;
                 forward = normalize(forward);
                 float lgihtAtten = 1 - dot(lightDirIgnorey, forward);
-                float shadow = smoothstep(lgihtAtten,lgihtAtten+0.2,sdf.r)+0.7;
-                return saturate(shadow);
+                float shadow = smoothstep(lgihtAtten,lgihtAtten+_ShadowFade,sdf.r);
+                shadow = lerp(_ShadowValue, 1, shadow);
+                return shadow;
             }
 
             v2f vert (appdata v)
@@ -77,12 +79,11 @@ Shader "WutheringWave/FaceShader"
 
             fixed4 frag (v2f i) : SV_Target
             {
-                // sample the texture
-                half4 color = tex2D(_MainTex, i.uv);
+                half4 albedo = tex2D(_MainTex, i.uv);
                 float shadow = FaceSDFShadow(_FaceSDF, i.uv, _WorldSpaceLightPos0, float3(0, 0, 1), float3(0, 1, 0));
                 half4 faceMask = half4(i.color, 1);
                 half4 id = tex2D(_IDMask, i.uv);
-                return color * shadow;
+                return albedo * shadow;
             }
             ENDCG
         }

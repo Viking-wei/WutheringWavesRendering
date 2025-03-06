@@ -6,7 +6,9 @@ Shader "WutheringWave/Skin"
         _NormalMap ("NormalMap", 2D) = "bump" {}
         _MatCapTex ("MatCapTex", 2D) = "Black" {}
         _OutlineTex ("OutlineTex", 2D) = "Black" {}
+        _OutlineColor ("Outline Color", Color) = (0,0,0,1)
         _OutlineWidth ("Outline Width", Range(0.1, 3)) = 0.5
+        _OutlineFadeDistance ("Outline Fade Distance", Range(0, 10)) = 4
         _ShadowEdgeStart ("Shadow Edge Start", Range(0,1)) = 0.2
         _ShadowEdgeEnd ("Shadow Edge End", Range(0,1)) = 0.7
         _ShadowValue ("Shadow Value", Range(0,1)) = 0.6
@@ -34,6 +36,8 @@ Shader "WutheringWave/Skin"
             {
                 float4 vertex : POSITION;
                 float2 uv : TEXCOORD0;
+                float2 uv2 : TEXCOORD1;
+                float2 uv3 : TEXCOORD2;
                 float3 color : COLOR;
                 float3 normal : NORMAL;
                 float3 tangent : TANGENT;
@@ -42,6 +46,7 @@ Shader "WutheringWave/Skin"
             struct v2f
             {
                 float2 uv : TEXCOORD0;
+                float3 smoothNormal : TEXCOORD5;
                 float3 color : TEXCOORD1;
                 float3 positionWS : TEXCOORD2;
                 float3 normal : TEXCOORD3;
@@ -65,6 +70,7 @@ Shader "WutheringWave/Skin"
                 o.vertex = UnityObjectToClipPos(v.vertex);
                 o.positionWS = mul(unity_ObjectToWorld, v.vertex).xyz;
                 o.uv = TRANSFORM_TEX(v.uv, _MainTex);
+                o.smoothNormal = normalize(float4(v.uv2,v.uv3).xyz);
                 o.color = v.color;
                 o.normal = UnityObjectToWorldNormal(v.normal);
                 o.tangent = UnityObjectToWorldDir(v.tangent);
@@ -79,7 +85,7 @@ Shader "WutheringWave/Skin"
                 float3 tangent = normalize(i.tangent);
                 
                 float3 normalWS = SampleNormalMap(_NormalMap, i.uv, normal, tangent);
-                //normalWS = UnityObjectToWorldNormal(normal);
+                float3 smoothNormal = normalize(i.smoothNormal);
 
                 float3 lightDir = _WorldSpaceLightPos0.xyz;
                 half3 lightColor = _LightColor0.xyz;
@@ -95,7 +101,6 @@ Shader "WutheringWave/Skin"
                 float2 matcapUV = 0.5 + 0.5 * viewNormal.xy;
                 half4 matcapColor = tex2D(_MatCapTex, matcapUV); 
                 float matcapMask = tex2D(_NormalMap, i.uv).b;
-                
                 half4 finalCol = albedo * cellShading * lightColor.rgbb + matcapColor * matcapMask;
                 UNITY_APPLY_FOG(i.fogCoord, finalCol);
                 return finalCol;
@@ -112,53 +117,7 @@ Shader "WutheringWave/Skin"
             CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-            #pragma multi_compile_fog
-            #include "UnityCG.cginc"
-
-            float _OutlineWidth;
-            sampler2D _OutlineTex;
-
-            struct appdata
-            {
-                float4 vertex : POSITION;
-                float2 uv : TEXCOORD0;
-                float3 color : COLOR;
-                float3 normal : NORMAL;
-                float3 tangent : TANGENT;
-            };
-
-            struct v2f
-            {
-                float2 uv : TEXCOORD0;
-                float3 color : TEXCOORD1;
-                UNITY_FOG_COORDS(1)
-                float4 vertex : SV_POSITION;
-            };
-
-            v2f vert (appdata v)
-            {   v2f o;
-                UNITY_INITIALIZE_OUTPUT(v2f, o);
-                float4 vertex = UnityObjectToClipPos(v.vertex);
-                float3 viewNormal = mul((float3x3)UNITY_MATRIX_IT_MV, v.tangent.xyz);
-                
-                float3 ndcNormal = normalize(TransformViewToProjection(viewNormal.xyz)) * vertex.w;//将法线变换到NDC空间
-                float4 nearUpperRight = mul(unity_CameraInvProjection, float4(1, 1, UNITY_NEAR_CLIP_VALUE, _ProjectionParams.y));//将近裁剪面右上角位置的顶点变换到观察空间
-                float aspect = abs(nearUpperRight.y / nearUpperRight.x);//求得屏幕宽高比
-                ndcNormal.x *= aspect;
-                vertex.xy += 0.01 * _OutlineWidth * ndcNormal.xy;
-                o.vertex = vertex;
-                o.uv = v.uv;
-                o.color = v.color;
-                UNITY_TRANSFER_FOG(o,o.vertex);
-                return o;
-            }
-            
-
-            half4 frag (v2f i) : SV_Target
-            {
-                half4 col = tex2D(_OutlineTex, i.uv);
-                return col;
-            }
+            #include "OutlinePass.cginc"
             ENDCG
         }
     }

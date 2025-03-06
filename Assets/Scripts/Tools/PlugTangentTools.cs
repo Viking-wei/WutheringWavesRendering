@@ -14,14 +14,16 @@ namespace Tools
             foreach (var meshFilter in meshFilters)
             {
                 Mesh mesh = meshFilter.sharedMesh;
-                WriteAverageNormalToTangent(mesh);
+                Debug.Log(mesh.vertexCount);
+                //WriteAverageNormalToTangent(mesh);
             }
 
             SkinnedMeshRenderer[] skinMeshRenders = Selection.activeGameObject.GetComponentsInChildren<SkinnedMeshRenderer>();
             foreach (var skinMeshRender in skinMeshRenders)
             {
                 Mesh mesh = skinMeshRender.sharedMesh;
-                WriteAverageNormalToTangent(mesh);
+                Debug.Log(mesh.vertexCount);
+                //WriteAverageNormalToTangent(mesh);
             }
         }
 

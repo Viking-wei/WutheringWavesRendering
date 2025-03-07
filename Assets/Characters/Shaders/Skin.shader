@@ -86,6 +86,11 @@ Shader "WutheringWave/Skin"
                 
                 float3 normalWS = SampleNormalMap(_NormalMap, i.uv, normal, tangent);
                 float3 smoothNormal = normalize(i.smoothNormal);
+                
+                
+                // float2 screenSpaceUV = i.vertex.xy/_ScreenParams.xy;
+                // float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, screenSpaceUV);
+                // return depth;
 
                 float3 lightDir = _WorldSpaceLightPos0.xyz;
                 half3 lightColor = _LightColor0.xyz;
@@ -120,5 +125,60 @@ Shader "WutheringWave/Skin"
             #include "OutlinePass.cginc"
             ENDCG
         }
+
+	    Pass
+	    {
+		    Name "ShadowCaster"
+		    Tags { "LightMode" = "ShadowCaster" }
+		    ZWrite On
+		    ZTest LEqual
+
+            CGPROGRAM
+            // compile directives
+            #pragma vertex vert_surf
+            #pragma fragment frag_surf
+
+            #include "UnityCG.cginc"
+
+            #pragma target 5.0
+
+            #pragma skip_variants FOG_LINEAR FOG_EXP FOG_EXP2
+            #pragma multi_compile_shadowcaster
+
+            // -------- variant for: <when no other keywords are defined>
+            #if !defined(INSTANCING_ON)
+
+            #define INTERNAL_DATA
+            #define WorldReflectionVector(data,normal) data.worldRefl
+            #define WorldNormalVector(data,normal) normal
+
+            // Original surface shader snippet:
+            #line 10 ""
+            #ifdef DUMMY_PREPROCESSOR_TO_WORK_AROUND_HLSL_COMPILER_LINE_HANDLING
+            #endif
+
+            struct v2f_surf {
+              V2F_SHADOW_CASTER;
+
+              UNITY_VERTEX_INPUT_INSTANCE_ID
+              UNITY_VERTEX_OUTPUT_STEREO
+            };
+
+            // vertex shader
+            inline v2f_surf vert_surf (appdata_full v) {
+              v2f_surf o;
+              UNITY_INITIALIZE_OUTPUT(v2f_surf,o);
+              TRANSFER_SHADOW_CASTER_NORMALOFFSET(o)
+              return o;
+            }
+
+            // fragment shader
+            inline fixed4 frag_surf (v2f_surf IN) : SV_Target {
+ 	            SHADOW_CASTER_FRAGMENT(IN)
+            }
+            #endif
+            ENDCG
+        }
+        
     }
 }

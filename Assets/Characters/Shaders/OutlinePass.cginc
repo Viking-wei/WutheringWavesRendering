@@ -13,8 +13,6 @@ float CustomDecayFunction(float x, float decayFactor)
     return exp(-decayFactor * x) * (1.0 - x);
 }
 
-
-
 struct appdata
 {
     float4 vertex : POSITION;

@@ -86,8 +86,8 @@ Material:
     - _Metallic: 0
     - _Mode: 0
     - _OcclusionStrength: 1
-    - _OutlineFadeDistance: 4
-    - _OutlineWidth: 0.27
+    - _OutlineFadeDistance: 5.82
+    - _OutlineWidth: 0.39
     - _Parallax: 0.02
     - _ShadowEdgeEnd: 0.521
     - _ShadowEdgeStart: 0.479
